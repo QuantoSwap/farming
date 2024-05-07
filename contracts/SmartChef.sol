@@ -595,7 +595,7 @@ contract SmartChef is Ownable {
         uint256 accQNSPerShare;  // Accumulated QNSs per share, times PRECISION_FACTOR. See below.
     }
 
-    IERC20 public QuantoSwap;
+    IERC20 public stakingToken;
     IERC20 public rewardToken;
     uint256 public rewardPerBlock;
 
@@ -621,14 +621,14 @@ contract SmartChef is Ownable {
     event RefPercentChanged(uint256 currentPercent);
 
     constructor(
-        IERC20 _QNS,
+        IERC20 _stakingToken,
         IERC20 _rewardToken,
         uint256 _rewardPerBlock,
         uint256 _startBlock,
         uint256 _bonusEndBlock,
         uint256 _limitStakeToken
     ) public {
-        QuantoSwap = _QNS;
+        stakingToken = _stakingToken;
         rewardToken = _rewardToken;
         rewardPerBlock = _rewardPerBlock;
         startBlock = _startBlock;
@@ -642,7 +642,7 @@ contract SmartChef is Ownable {
         PRECISION_FACTOR = uint256(10**(uint256(30).sub(decimalsRewardToken)));
 
         poolInfo.push(PoolInfo({
-            lpToken: _QNS,
+            lpToken: _stakingToken,
             allocPoint: 1000,
             lastRewardBlock: startBlock,
             accQNSPerShare: 0
@@ -741,9 +741,9 @@ contract SmartChef is Ownable {
         }
         if(_amount > 0) {
             user.amount = user.amount.sub(_amount);
+            user.rewardDebt = user.amount.mul(pool.accQNSPerShare).div(PRECISION_FACTOR);
             pool.lpToken.safeTransfer(address(msg.sender), _amount);
         }
-        user.rewardDebt = user.amount.mul(pool.accQNSPerShare).div(PRECISION_FACTOR);
 
         emit Withdraw(msg.sender, _amount);
     }

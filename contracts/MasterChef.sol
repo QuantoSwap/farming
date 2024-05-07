@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./QuantoSwapToken.sol";
+import "./lib/IERC20MaxSupply.sol";
 
 interface IMigratorChef {
     function migrate(IERC20 token) external returns (IERC20);
@@ -97,13 +98,22 @@ contract MasterChef is Initializable, OwnableUpgradeable {
     }
 
     function newQNSPerBlock(uint256 _QNSPerBlock) public onlyOwner {
+        massUpdatePools();
         QNSPerBlock = _QNSPerBlock;
+    }
+
+    function checkDuplicate(IERC20 _lpToken) internal {
+        uint256 length = poolInfo.length;
+        for (uint256 pid = 0; pid < length; ++pid){
+            require(poolInfo[pid].lpToken != _lpToken, "add: existing pool");
+        }
     }
 
     function add( uint256 _allocPoint, IERC20 _lpToken, bool _withUpdate ) public onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
+        checkDuplicate(_lpToken);
         uint256 lastRewardBlock = block.number > startBlock ? block.number : startBlock;
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
         poolInfo.push(
@@ -116,10 +126,8 @@ contract MasterChef is Initializable, OwnableUpgradeable {
         );
     }
 
-    function set( uint256 _pid, uint256 _allocPoint, bool _withUpdate) public onlyOwner {
-        if (_withUpdate) {
-            massUpdatePools();
-        }
+    function set( uint256 _pid, uint256 _allocPoint) public onlyOwner {
+        massUpdatePools();
         totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(_allocPoint);
         poolInfo[_pid].allocPoint = _allocPoint;
     }
@@ -258,13 +266,14 @@ contract MasterChef is Initializable, OwnableUpgradeable {
     function emergencyWithdraw(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-        pool.lpToken.safeTransfer(address(msg.sender), user.amount);
-        if (_pid == 0){
-            depositedQNS = depositedQNS.sub(user.amount);
-        }
-        emit EmergencyWithdraw(msg.sender, _pid, user.amount);
+        uint256 amountToTransfer = user.amount;
         user.amount = 0;
         user.rewardDebt = 0;
+        if (_pid == 0){
+            depositedQNS = depositedQNS.sub(amountToTransfer);
+        }
+        pool.lpToken.safeTransfer(address(msg.sender), amountToTransfer);
+        emit EmergencyWithdraw(msg.sender, _pid, amountToTransfer);
     }
 
     function safeQNSTransfer(address _to, uint256 _amount) internal {
